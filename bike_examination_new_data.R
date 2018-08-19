@@ -1,0 +1,182 @@
+library(tidyverse)
+library(lubridate)
+#older csv
+#bikes <- read_csv("bike_share_data.csv")
+#newer version below
+bikes <- read_csv("202272.CSV")
+
+
+#after looking at the data, I saw many trips of under 1 minute. That's weird. I'll ask why. But I'd like to see those trips greater than 1 minute. 
+
+minute_trips <- bikes %>%
+  filter(duration_in_minute > 1)
+
+
+
+glimpse(bikes) 
+
+total_trips <- bikes %>% 
+group_by(trip_id) %>% 
+summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+#In these first few calculations, I'm looking at where these trips originate and where they end. As the calculations reveal, very few people in wards 7 and 8 are using the bikes. Only a fraction of trips strt and end in those wards. 
+ward_origin <-  bikes %>%
+group_by(start_ward) %>% 
+  #creates a count with the row name being count. The n value is the number of times it occurs
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+#looks at where the bikes are dropped offf
+ward_destination<-  bikes %>%
+  group_by(end_ward) %>% 
+  #creates a count with the row name being count. The n value is the number of times it occurs
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+#looks at where the bikes are picked up
+start_end<-  bikes %>%
+  group_by(start_ward, end_ward) %>% 
+  #creates a count with the row name being count. The n value is the number of times it occurs
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+
+write_csv(start_end, "start_end.csv")
+
+
+
+#let's just look at the bike companies and their unique bikes. And then see how many trips each bike took. 
+bike_companies <- bikes  %>%
+    group_by(`operator`, `vehicle_id`) %>% 
+  #creates a count with the row name being count. The n value is the number of times it occurs
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+#now lets see how many bikes each company had
+
+unique_bikes <- bike_companies %>%
+  group_by(`operator`)%>% 
+  #creates a count with the row name being count. The n value is the number of times it occurs
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+write_csv(unique_bikes, "unique_bikes_by_company.csv")
+
+
+#Sorts the bike column in a format that will hopefully help me calculate the time elapsed between first and last time bike was checked out
+
+sorted_bikes<-bikes  %>% 
+  arrange(desc(start_time_est)) %>%
+  arrange(desc(vehicle_id)) 
+
+as.Date(sorted_bikes$start_time_est)
+
+#THEN sets the start and end date as POSIXlt in a way that the computer gods smile upon...Was previously a character class
+#this works for all companies except for Mobikes. For whatevver reason, they don't have H:M data 
+sorted_bikes$start_time_est <- as.POSIXct(sorted_bikes$start_time_est, format = "%m/%d/%Y %H:%M")
+sorted_bikes$end_time_est <- as.POSIXct(sorted_bikes$end_time_est, format = "%m/%d/%Y %H:%M")
+
+#double checks the class
+class(sorted_bikes$start_time_est)
+class(sorted_bikes$end_time_est)
+
+
+#this was a test to look at the feasibility of total days between the first time it was ridden and the last time it was ridden.
+test <- sorted_bikes %>%
+  filter(`vehicle_id` =="ZZSN7KWMSYXI7")  %>%
+  summarize(Earliest=min(start_time_est), Latest=max(end_time_est), days=(difftime(Latest, Earliest, tz= EST, units = "days")))
+
+
+#now this calculation goes through and evaluates the lifetime of each bike by unique id and gives an exact number of daysbetween the first and last rides. 
+
+lifetime_days <- sorted_bikes %>%
+  group_by(`operator`, `vehicle_id`) %>%
+  summarize(Earliest=min(start_time_est), Latest=max(end_time_est), days=(difftime(Latest, Earliest, tz= "EST", units = "days")))
+
+#so I noticed a bunch of bikes that lasted only 1 day on the streets. I isolated and counted them to see how many there were. Then, I also pulled a full list to ask the companies.
+
+day_trips <- lifetime_days %>%
+  filter(days < 1) %>%
+  group_by(operator)%>%
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+
+day_bikes <- lifetime_days %>%
+  filter(days < 1) 
+
+write_csv(day_trips, "day_trips.csv")
+write_csv(day_bikes, "day_bikes.csv")
+
+
+#looks at the average bike life
+average_bike_life <- lifetime_days %>%
+  group_by(operator) %>%
+  summarize(Mean = mean(days))
+
+write_csv(average_bike_life, "average_bike_life.csv")
+
+#loooks at the median bike life
+median_bike_life <- lifetime_days %>%
+  group_by(operator) %>%
+  summarize(median = median(days))
+
+write_csv(median_bike_life, "median_bike_life.csv")
+
+
+##############MOBIKE#######
+#So I ended up with one problem: The Mobike data didn't come through....it appears there's an issue with the time stamp data....I believeit's because the est. field does not have H and M data. So I will have to pull that data and examine it separately. 
+
+#filter out just moboke
+mobike_bikes <- bikes %>%
+  filter(operator == "mobike")
+#set data as posixct format
+mobike_bikes$end_time_est <- as.POSIXct(mobike_bikes$end_time_est,format='%m/%d/%Y')
+#check it
+class(mobike_bikes$end_time_est)
+#repeat for start time
+mobike_bikes$start_time_est <- as.POSIXct(mobike_bikes$start_time_est,format='%m/%d/%Y')
+class(mobike_bikes$start_time_est)
+
+
+###
+#now let's figure out the mobike lifetimes/averages, etc.
+mobike_lifetime<- mobike_bikes %>%
+  group_by(`operator`, `vehicle_id`) %>%
+  summarize(Earliest=min(start_time_est), Latest=max(end_time_est), days=(difftime(Latest, Earliest, units = "days")))
+
+mobike_day_trips <- mobike_lifetime %>%
+  filter(days < 1) %>%
+  group_by(operator)%>%
+  summarise(count = n()) %>%
+  #arrange the list in descending order
+  arrange(desc(count)) 
+
+
+mobike_day_bikes <- mobike_lifetime %>%
+  filter(days < 1) 
+
+write_csv(mobike_day_bikes, "mobike_day_bikes.csv")
+write_csv(mobike_day_trips , "mobike_day_trips .csv")
+
+
+#looks at the average bike life
+average_mobike_life <- mobike_lifetime %>%
+  group_by(operator) %>%
+  summarize(Mean = mean(days))
+
+write_csv(average_mobike_life, "average_mobike_life.csv")
+
+#loooks at the median bike life
+median_mobike_life <- mobike_lifetime %>%
+  group_by(operator) %>%
+  summarize(median = median(days))
+
+write_csv(median_mobike_life, "median_mobike_life.csv")
+
