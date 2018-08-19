@@ -1,0 +1,22 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1534698636484.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "3036410550",
+    "id" : "7377A79D",
+    "lastKnownWriteTime" : 1534698712,
+    "last_content_update" : 1534698712081,
+    "path" : "/GitHub/Dockless_bike_share_analysis/bike_examination_new_data.R",
+    "project_path" : "bike_examination_new_data.R",
+    "properties" : {
+        "cursorPosition" : "195,0",
+        "scrollLine" : "179"
+    },
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
